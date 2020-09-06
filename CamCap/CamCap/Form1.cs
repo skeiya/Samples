@@ -17,37 +17,38 @@ namespace CamCap
     {
         int WIDTH = 640;
         int HEIGHT = 480;
-        Mat frame;
-        VideoCapture capture;
-        Bitmap bmp;
-        Graphics graphic;
+        Mat _frame;
+        VideoCapture _capture;
+        VideoWriter _videoWriter;
+        Bitmap _bmp;
+        Graphics _graphic;
         public Form1()
         {
             InitializeComponent();
             this.FormClosing += Form1_FormClosing;
             this._timer.Tick += _timer_Tick;
             //カメラ画像取得用のVideoCapture作成
-            capture = new VideoCapture(0);
-            if (!capture.IsOpened())
+            _capture = new VideoCapture(0);
+            if (!_capture.IsOpened())
             {
                 MessageBox.Show("camera was not found!");
                 this.Close();
             }
-            capture.FrameWidth = WIDTH;
-            capture.FrameHeight = HEIGHT;
+            _capture.FrameWidth = WIDTH;
+            _capture.FrameHeight = HEIGHT;
 
             //取得先のMat作成
-            frame = new Mat(HEIGHT, WIDTH, MatType.CV_8UC3);
+            _frame = new Mat(HEIGHT, WIDTH, MatType.CV_8UC3);
 
             //表示用のBitmap作成
-            bmp = new Bitmap(frame.Cols, frame.Rows, (int)frame.Step(), System.Drawing.Imaging.PixelFormat.Format24bppRgb, frame.Data);
+            _bmp = new Bitmap(_frame.Cols, _frame.Rows, (int)_frame.Step(), System.Drawing.Imaging.PixelFormat.Format24bppRgb, _frame.Data);
 
             //PictureBoxを出力サイズに合わせる
-            pictureBox1.Width = frame.Cols;
-            pictureBox1.Height = frame.Rows;
+            pictureBox1.Width = _frame.Cols;
+            pictureBox1.Height = _frame.Rows;
 
             //描画用のGraphics作成
-            graphic = pictureBox1.CreateGraphics();
+            _graphic = pictureBox1.CreateGraphics();
 
             //画像取得スレッド開始
             backgroundWorker1.DoWork += backgroundWorker1_DoWork;
@@ -60,7 +61,9 @@ namespace CamCap
         private void backgroundWorker1_ProgressChanged(object sender, ProgressChangedEventArgs e)
         {
             //描画
-            graphic.DrawImage(bmp, 0, 0, frame.Cols, frame.Rows);
+            _graphic.DrawImage(_bmp, 0, 0, _frame.Cols, _frame.Rows);
+
+            _videoWriter?.Write(_frame);
         }
 
         private void backgroundWorker1_DoWork(object sender, DoWorkEventArgs e)
@@ -70,8 +73,8 @@ namespace CamCap
             while (!backgroundWorker1.CancellationPending)
             {
                 //画像取得
-                capture.Grab();
-                NativeMethods.videoio_VideoCapture_operatorRightShift_Mat(capture.CvPtr, frame.CvPtr);
+                _capture.Grab();
+                NativeMethods.videoio_VideoCapture_operatorRightShift_Mat(_capture.CvPtr, _frame.CvPtr);
 
                 bw.ReportProgress(0);
             }
@@ -92,13 +95,7 @@ namespace CamCap
         private void _timer_Tick(object sender, EventArgs e)
         {
             var path = Path.Combine(textBox1.Text, DateTime.Now.ToString("yyyyMMddhhmmssfff")) + ".jpg";
-            frame.SaveImage(path);
-            //using (Mat cap = new Mat(@"C:\cs_source\img\cap.png"))
-            //{
-            //    //保存されたキャプチャ画像の出力
-            //    Cv2.ImShow("test1", frame);
-            //}
-
+            _frame.SaveImage(path);
             if (_sw.Elapsed.TotalSeconds > 15)
             {
                 _sw.Stop();
@@ -106,13 +103,35 @@ namespace CamCap
                 button1.Enabled = true;
             }
         }
-        
+
         private void button1_Click(object sender, EventArgs e)
         {
             _timer.Interval = 50;
             _timer.Enabled = true;
             _sw.Restart();
             button1.Enabled = false;
+        }
+
+        private void buttonRecord_Click(object sender, EventArgs e)
+        {
+            if (_videoWriter == null)
+            {
+                _videoWriter = new VideoWriter();
+                // https://www.atmarkit.co.jp/ait/articles/1610/18/news143_2.html
+                if (!_videoWriter.Open(@"C:\Users\skeiya\caps\video.mp4", FourCC.MP4V, 20.0, new OpenCvSharp.Size(WIDTH, HEIGHT)))
+                {
+                    MessageBox.Show("hoge");
+                    return;
+                }
+                buttonRecord.Text = "停止";
+            }
+            else
+            {
+                _videoWriter.Release();
+                _videoWriter.Dispose();
+                _videoWriter = null;
+                buttonRecord.Text = "録画";
+            }
         }
     }
 }
